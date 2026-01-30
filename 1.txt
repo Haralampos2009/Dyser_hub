@@ -774,7 +774,7 @@ local searchOpen = false
 local Notifications = Rayfield.Notifications
 local keybindConnections = {} -- For storing keybind connections to disconnect when Rayfield is destroyed
 
-local SelectedTheme = RayfieldLibrary.Theme.Default
+local SelectedTheme = RayfieldLibrary.Theme.Ocean
 
 local function ChangeTheme(Theme)
 	if typeof(Theme) == 'string' then
@@ -1675,9 +1675,9 @@ function RayfieldLibrary:CreateWindow(Settings)
 	if Settings.Theme then
 		local success, result = pcall(ChangeTheme, Settings.Theme)
 		if not success then
-			local success, result2 = pcall(ChangeTheme, 'Default')
+			local success, result2 = pcall(ChangeTheme, 'Ocean')
 			if not success then
-				warn('CRITICAL ERROR - NO DEFAULT THEME')
+				warn('CRITICAL ERROR - NO OCEAN THEME')
 				print(result2)
 			end
 			warn('issue rendering theme. no theme on file')
@@ -2232,7 +2232,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 					TweenService:Create(ColorPicker.HexInput, TweenInfo.new(0.5, Enum.EasingStyle.Exponential), {Position = UDim2.new(0, 17, 0, 73)}):Play()
 					TweenService:Create(ColorPicker.Interact, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), {Size = UDim2.new(0.574, 0, 1, 0)}):Play()
 					TweenService:Create(Main.MainPoint, TweenInfo.new(0.2, Enum.EasingStyle.Exponential), {ImageTransparency = 0}):Play()
-					TweenService:Create(Main, TweenInfo.new(0.2, Enum.EasingStyle.Exponential), {ImageTransparency = SelectedTheme ~= RayfieldLibrary.Theme.Default and 0.25 or 0.1}):Play()
+					TweenService:Create(Main, TweenInfo.new(0.2, Enum.EasingStyle.Exponential), {ImageTransparency = SelectedTheme ~= RayfieldLibrary.Theme.Ocean and 0.25 or 0.1}):Play()
 					TweenService:Create(Background, TweenInfo.new(0.6, Enum.EasingStyle.Exponential), {BackgroundTransparency = 0}):Play()
 				else
 					opened = false
@@ -3158,7 +3158,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 			Toggle.Title.TextTransparency = 1
 			Toggle.Switch.BackgroundColor3 = SelectedTheme.ToggleBackground
 
-			if SelectedTheme ~= RayfieldLibrary.Theme.Default then
+			if SelectedTheme ~= RayfieldLibrary.Theme.Ocean then
 				Toggle.Switch.Shadow.Visible = false
 			end
 
@@ -3294,7 +3294,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 			Rayfield.Main:GetPropertyChangedSignal('BackgroundColor3'):Connect(function()
 				Toggle.Switch.BackgroundColor3 = SelectedTheme.ToggleBackground
 
-				if SelectedTheme ~= RayfieldLibrary.Theme.Default then
+				if SelectedTheme ~= RayfieldLibrary.Theme.Ocean then
 					Toggle.Switch.Shadow.Visible = false
 				end
 
@@ -3327,7 +3327,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 			Slider.UIStroke.Transparency = 1
 			Slider.Title.TextTransparency = 1
 
-			if SelectedTheme ~= RayfieldLibrary.Theme.Default then
+			if SelectedTheme ~= RayfieldLibrary.Theme.Ocean then
 				Slider.Main.Shadow.Visible = false
 			end
 
@@ -3473,7 +3473,7 @@ function RayfieldLibrary:CreateWindow(Settings)
 			end
 
 			Rayfield.Main:GetPropertyChangedSignal('BackgroundColor3'):Connect(function()
-				if SelectedTheme ~= RayfieldLibrary.Theme.Default then
+				if SelectedTheme ~= RayfieldLibrary.Theme.Ocean then
 					Slider.Main.Shadow.Visible = false
 				end
 
@@ -3778,7 +3778,7 @@ if useStudio then
 	--local Window = RayfieldLibrary:CreateWindow({
 	--	Name = "Rayfield Example Window",
 	--	LoadingTitle = "Rayfield Interface Suite",
-	--	Theme = 'Default',
+	--	Theme = '',
 	--	Icon = 0,
 	--	LoadingSubtitle = "by Sirius",
 	--	ConfigurationSaving = {
@@ -3910,7 +3910,7 @@ if useStudio then
 	--local Dropdown = Tab:CreateDropdown({
 	--	Name = "Theme",
 	--	Options = thoptions,
-	--	CurrentOption = {"Default"},
+	--	CurrentOption = {""},
 	--	MultipleOptions = false,
 	--	Flag = "Dropdown1", -- A flag is the identifier for the configuration file, make sure every element has a different flag if you're using configuration saving to ensure no overlaps
 	--	Callback = function(Options)
