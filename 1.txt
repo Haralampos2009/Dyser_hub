@@ -257,9 +257,9 @@ if not requestsDisabled then
 		end
 	end
 	if cachedSettings and (#cachedSettings == 0 or (cachedSettings.System and cachedSettings.System.usageAnalytics and cachedSettings.System.usageAnalytics.Value)) then
-		sendReport("execution", "Dyser")
+		sendReport("execution", "Rayfield")
 	elseif not cachedSettings then
-		sendReport("execution", "Dyser")
+		sendReport("execution", "Rayfield")
 	end
 end
 
