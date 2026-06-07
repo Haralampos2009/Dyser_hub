@@ -1,0 +1,1261 @@
+-- Menu Library - Based on original menu code
+-- Load this library and use it to create menu content
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local HttpService = game:GetService("HttpService")
+
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local Library = {}
+
+-- Default configuration
+Library.Config = {
+	MENU_NAME = "Menu",
+	TOP_TABS = {
+		{ name = "Main", sideTabs = { "Home", "Aim", "Visuals", "Misc", "Movement" } },
+		{ name = "Profiles", sideTabs = { "Config", "Scripts" } },
+		{ name = "Theme", sideTabs = { "Config", "Players" } },
+	},
+	SIDE_TABS = {
+		"Home", "Aim", "Visuals", "Misc", "Movement", "Config", "Scripts", "Players"
+	},
+	RIGHT_TABS = {
+		"Preview", "Settings", "Info",
+	},
+	COLORS = {
+		black = Color3.fromRGB(0, 0, 0),
+		panel = Color3.fromRGB(4, 4, 5),
+		panel2 = Color3.fromRGB(12, 12, 13),
+		line = Color3.fromRGB(30, 30, 32),
+		lineLight = Color3.fromRGB(48, 48, 50),
+		red = Color3.fromRGB(70, 230, 120),
+		redDark = Color3.fromRGB(40, 140, 80),
+		pink = Color3.fromRGB(216, 39, 130),
+		text = Color3.fromRGB(218, 218, 222),
+		muted = Color3.fromRGB(170, 170, 176),
+		white = Color3.fromRGB(255, 255, 255),
+	},
+	MENU = {
+		position = { x = 0.21, y = 0.21 },
+		size = { x = 0.5, y = 0.6 },
+		scale = 0.95,
+		minSize = { x = 650, y = 460 },
+		maxSize = { x = 900, y = 800 },
+	},
+	SIZES = {
+		topBarHeight = 30,
+		sideWidth = 132,
+		colorDotSize = 12,
+		colorDotStrokeThickness = 3,
+		toggleBoxSize = 20,
+		sliderHeight = 17,
+		sectionHeight = 25,
+		rowHeight = 23,
+	},
+	FONTS = {
+		default = Enum.Font.Code,
+		bold = Enum.Font.GothamBold,
+	},
+	TEXT_SIZES = {
+		title = 14,
+		tab = 11,
+		sideTab = 10,
+		label = 13,
+		value = 14,
+		section = 12,
+	},
+	TOGGLE_KEY = Enum.KeyCode.RightShift,
+	DIM_TRANSPARENCY = 1,
+	COLOR_SWATCHES = {
+		Color3.fromRGB(160, 20, 46),
+		Color3.fromRGB(215, 42, 130),
+		Color3.fromRGB(70, 230, 120),
+		Color3.fromRGB(70, 140, 245),
+		Color3.fromRGB(230, 198, 60),
+		Color3.fromRGB(190, 90, 245),
+	},
+}
+
+-- Internal state
+local COLORS = Library.Config.COLORS
+local accentBackgrounds = {}
+local accentDarkBackgrounds = {}
+local accentStrokes = {}
+local accentGradients = {}
+local selectedTopLeftTab = nil
+local selectedSideButtonGradient = nil
+local activeColorDot = nil
+local sideButtons = {}
+local tabPages = {}
+local activeTabPage = nil
+local searchableElements = {}
+local rightTabButtons = {}
+local rightTabPages = {}
+local selectedRightTab = nil
+local windowRef = nil
+local screenGuiRef = nil
+
+-- Helper functions
+local function scaledColor(color, scale)
+	return Color3.new(
+		math.clamp(color.R * scale, 0, 1),
+		math.clamp(color.G * scale, 0, 1),
+		math.clamp(color.B * scale, 0, 1)
+	)
+end
+
+local function trackAccentBackground(object)
+	table.insert(accentBackgrounds, object)
+	object.BackgroundColor3 = COLORS.red
+	return object
+end
+
+local function trackAccentDarkBackground(object)
+	table.insert(accentDarkBackgrounds, object)
+	object.BackgroundColor3 = COLORS.redDark
+	return object
+end
+
+local function trackAccentStroke(stroke)
+	table.insert(accentStrokes, stroke)
+	stroke.Color = COLORS.red
+	return stroke
+end
+
+local function trackAccentGradient(gradient)
+	table.insert(accentGradients, gradient)
+	gradient.Color = ColorSequence.new(COLORS.redDark, COLORS.red)
+	return gradient
+end
+
+function Library.SetAccentColor(color)
+	COLORS.red = color
+	COLORS.redDark = scaledColor(color, 0.55)
+
+	for _, object in ipairs(accentBackgrounds) do
+		if object and object.Parent then
+			object.BackgroundColor3 = COLORS.red
+		end
+	end
+
+	for _, object in ipairs(accentDarkBackgrounds) do
+		if object and object.Parent then
+			object.BackgroundColor3 = COLORS.redDark
+		end
+	end
+
+	for _, stroke in ipairs(accentStrokes) do
+		if stroke and stroke.Parent then
+			stroke.Color = COLORS.red
+		end
+	end
+
+	for _, gradient in ipairs(accentGradients) do
+		if gradient and gradient.Parent then
+			gradient.Color = ColorSequence.new(COLORS.redDark, COLORS.red)
+		end
+	end
+
+	if selectedTopLeftTab and selectedTopLeftTab.Parent then
+		selectedTopLeftTab.BackgroundColor3 = COLORS.red
+	end
+
+	if selectedSideButtonGradient and selectedSideButtonGradient.Parent then
+		selectedSideButtonGradient.Color = ColorSequence.new(COLORS.redDark, COLORS.red)
+	end
+end
+
+function Library.AddCorner(parent, radius)
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, radius)
+	corner.Parent = parent
+	return corner
+end
+
+function Library.AddStroke(parent, color, thickness, transparency)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color
+	stroke.Thickness = thickness or 1
+	stroke.Transparency = transparency or 0
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = parent
+	return stroke
+end
+
+function Library.AddGradient(parent, colorA, colorB, rotation)
+	local gradient = Instance.new("UIGradient")
+	gradient.Color = ColorSequence.new(colorA, colorB)
+	gradient.Rotation = rotation or 90
+	gradient.Parent = parent
+	return gradient
+end
+
+function Library.MakeText(className, props)
+	local object = Instance.new(className)
+	object.BackgroundTransparency = props.BackgroundTransparency or 1
+	object.Text = props.Text or ""
+	object.TextColor3 = props.TextColor3 or COLORS.text
+	object.TextSize = props.TextSize or 14
+	object.TextXAlignment = props.TextXAlignment or Enum.TextXAlignment.Left
+	object.TextYAlignment = props.TextYAlignment or Enum.TextYAlignment.Center
+	object.Font = props.Font or Enum.Font.Code
+	object.BorderSizePixel = 0
+
+	for key, value in pairs(props) do
+		if object[key] ~= nil then
+			object[key] = value
+		end
+	end
+
+	return object
+end
+
+function Library.RegisterSearchable(name, sideTab, element)
+	table.insert(searchableElements, {
+		name = name,
+		sideTab = sideTab,
+		element = element
+	})
+end
+
+-- Main window creation
+function Library.New(config)
+	if config then
+		for key, value in pairs(config) do
+			if Library.Config[key] then
+				Library.Config[key] = value
+			end
+		end
+	end
+	
+	COLORS = Library.Config.COLORS
+	
+	-- Remove old GUI
+	local oldGui = playerGui:FindFirstChild("NumberedMenuReplica")
+	if oldGui then
+		oldGui:Destroy()
+	end
+
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "NumberedMenuReplica"
+	screenGui.IgnoreGuiInset = true
+	screenGui.ResetOnSpawn = false
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	screenGui.Parent = playerGui
+	screenGuiRef = screenGui
+
+	local dim = Instance.new("Frame")
+	dim.Name = "SoftGameDim"
+	dim.Size = UDim2.fromScale(1, 1)
+	dim.BackgroundColor3 = Color3.fromRGB(8, 14, 11)
+	dim.BackgroundTransparency = Library.Config.DIM_TRANSPARENCY
+	dim.BorderSizePixel = 0
+	dim.Parent = screenGui
+
+	local window = Instance.new("Frame")
+	window.Name = "MenuWindow"
+	window.Position = UDim2.new(Library.Config.MENU.position.x, 0, Library.Config.MENU.position.y, 0)
+	window.Size = UDim2.new(Library.Config.MENU.size.x, 0, Library.Config.MENU.size.y, 0)
+	window.BackgroundColor3 = COLORS.black
+	window.BorderSizePixel = 0
+	window.Visible = false
+	window.Parent = screenGui
+	Library.AddStroke(window, COLORS.red, 1, 0.35)
+	windowRef = window
+
+	local windowScale = Instance.new("UIScale")
+	windowScale.Scale = Library.Config.MENU.scale
+	windowScale.Parent = window
+
+	local sizeLimit = Instance.new("UISizeConstraint")
+	sizeLimit.MinSize = Vector2.new(Library.Config.MENU.minSize.x, Library.Config.MENU.minSize.y)
+	sizeLimit.MaxSize = Vector2.new(Library.Config.MENU.maxSize.x, Library.Config.MENU.maxSize.y)
+	sizeLimit.Parent = window
+
+	-- Build UI structure
+	Library.BuildTopBar(window)
+	Library.BuildBody(window)
+	Library.BuildColorPicker(window)
+	
+	-- Setup toggle key
+	UserInputService.InputBegan:Connect(function(input, gameProcessed)
+		if gameProcessed then return end
+		if input.KeyCode == Library.Config.TOGGLE_KEY then
+			Library.ToggleMenu()
+		end
+	end)
+
+	-- Auto open menu
+	Library.OpenMenu()
+
+	return {
+		window = window,
+		screenGui = screenGui,
+		dim = dim,
+	}
+end
+
+-- Build top bar
+function Library.BuildTopBar(window)
+	local topBar = Instance.new("Frame")
+	topBar.Name = "TopBar"
+	topBar.Size = UDim2.new(1, 0, 0, Library.Config.SIZES.topBarHeight)
+	topBar.BackgroundColor3 = COLORS.panel2
+	topBar.BorderSizePixel = 0
+	topBar.Parent = window
+	Library.AddGradient(topBar, Color3.fromRGB(20, 20, 21), Color3.fromRGB(5, 5, 5), 90)
+
+	local topRedLine = Instance.new("Frame")
+	topRedLine.Name = "TopRedLine"
+	topRedLine.AnchorPoint = Vector2.new(0, 1)
+	topRedLine.Position = UDim2.new(0, 0, 1, 0)
+	topRedLine.Size = UDim2.new(1, 0, 0, 1)
+	topRedLine.BackgroundColor3 = COLORS.redDark
+	topRedLine.BorderSizePixel = 0
+	topRedLine.Parent = topBar
+	trackAccentDarkBackground(topRedLine)
+
+	local back = Library.MakeText("TextLabel", {
+		Name = "Back",
+		Size = UDim2.fromOffset(26, 30),
+		Text = "<",
+		TextSize = 16,
+		Font = Library.Config.FONTS.bold,
+		TextXAlignment = Enum.TextXAlignment.Center,
+	})
+	back.Parent = topBar
+
+	local title = Library.MakeText("TextLabel", {
+		Name = "Title1",
+		Position = UDim2.fromOffset(26, 0),
+		Size = UDim2.fromOffset(88, 30),
+		Text = Library.Config.MENU_NAME,
+		TextSize = Library.Config.TEXT_SIZES.title,
+		Font = Library.Config.FONTS.bold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	title.TextStrokeTransparency = 0.55
+	title.Parent = topBar
+
+	local titlePadding = Instance.new("UIPadding")
+	titlePadding.PaddingLeft = UDim.new(0, 10)
+	titlePadding.Parent = title
+
+	-- Top left tabs
+	local topLeftTabs = Instance.new("Frame")
+	topLeftTabs.Name = "TopLeftTabs"
+	topLeftTabs.Position = UDim2.fromOffset(112, 4)
+	topLeftTabs.Size = UDim2.fromOffset(180, 22)
+	topLeftTabs.BackgroundTransparency = 1
+	topLeftTabs.Parent = topBar
+
+	local topLeftTabList = Instance.new("UIListLayout")
+	topLeftTabList.FillDirection = Enum.FillDirection.Horizontal
+	topLeftTabList.Padding = UDim.new(0, 4)
+	topLeftTabList.SortOrder = Enum.SortOrder.LayoutOrder
+	topLeftTabList.Parent = topLeftTabs
+
+	local topLeftTabButtons = {}
+	local topTabContents = {}
+	local TOP_TAB_NAMES = {}
+	local TOP_TAB_SIDE_TABS = {}
+
+	for _, tab in ipairs(Library.Config.TOP_TABS) do
+		table.insert(TOP_TAB_NAMES, tab.name)
+		TOP_TAB_SIDE_TABS[tab.name] = tab.sideTabs
+	end
+
+	local function selectTopLeftTab(tab, tabName)
+		for _, otherTab in ipairs(topLeftTabButtons) do
+			otherTab.button.BackgroundColor3 = Color3.fromRGB(8, 8, 9)
+			otherTab.button.TextColor3 = COLORS.text
+		end
+
+		selectedTopLeftTab = tab
+		tab.BackgroundColor3 = COLORS.red
+		tab.TextColor3 = Color3.fromRGB(255, 255, 255)
+		title.Text = tabName
+		
+		for name, content in pairs(topTabContents) do
+			content.Visible = (name == tabName)
+		end
+		
+		local sideTabsForTop = TOP_TAB_SIDE_TABS[tabName] or {}
+		for _, entry in ipairs(sideButtons) do
+			local shouldShow = false
+			for _, tabNameInList in ipairs(sideTabsForTop) do
+				if entry.name == tabNameInList then
+					shouldShow = true
+					break
+				end
+			end
+			entry.button.Visible = shouldShow
+			entry.page.Visible = false
+		end
+		
+		for _, entry in ipairs(sideButtons) do
+			if entry.button.Visible then
+				Library.SelectSideButton(entry.button, entry.gradient, entry.name, entry.page)
+				break
+			end
+		end
+	end
+
+	for index, tabName in ipairs(TOP_TAB_NAMES) do
+		local tab = Library.MakeText("TextButton", {
+			Name = "TopLeftTab" .. index,
+			Size = UDim2.fromOffset(56, 22),
+			BackgroundTransparency = 0,
+			BackgroundColor3 = index == 1 and COLORS.red or Color3.fromRGB(8, 8, 9),
+			Text = tabName,
+			TextSize = Library.Config.TEXT_SIZES.tab,
+			Font = Library.Config.FONTS.bold,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			AutoButtonColor = false,
+		})
+		tab.Parent = topLeftTabs
+		Library.AddCorner(tab, 3)
+		Library.AddStroke(tab, COLORS.lineLight, 1, 0.25)
+		table.insert(topLeftTabButtons, { button = tab, name = tabName })
+
+		tab.MouseButton1Click:Connect(function()
+			selectTopLeftTab(tab, tabName)
+		end)
+	end
+
+	if topLeftTabButtons[1] then
+		selectTopLeftTab(topLeftTabButtons[1].button, topLeftTabButtons[1].name)
+	end
+
+	-- More top bar elements...
+	local dyserTitle = Library.MakeText("TextLabel", {
+		Name = "DyserTitle",
+		Position = UDim2.fromOffset(400, 0),
+		Size = UDim2.fromOffset(40, 30),
+		Text = "Dyser",
+		TextSize = 14,
+		Font = Library.Config.FONTS.bold,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextYAlignment = Enum.TextYAlignment.Center,
+		TextColor3 = COLORS.red,
+	})
+	dyserTitle.Parent = topBar
+
+	local titleDivider = Instance.new("Frame")
+	titleDivider.Position = UDim2.fromOffset(296, 0)
+	titleDivider.Size = UDim2.fromOffset(1, 30)
+	titleDivider.BackgroundColor3 = COLORS.line
+	titleDivider.BorderSizePixel = 0
+	titleDivider.Parent = topBar
+
+	local tabText = Library.MakeText("TextLabel", {
+		Name = "TopTab2",
+		Position = UDim2.fromOffset(297, 0),
+		Size = UDim2.new(1, -351, 0, 30),
+		Text = Library.Config.SIDE_TABS[1],
+		TextSize = Library.Config.TEXT_SIZES.label,
+	})
+	tabText.TextStrokeTransparency = 0.65
+	tabText.Parent = topBar
+
+	local tabPadding = Instance.new("UIPadding")
+	tabPadding.PaddingLeft = UDim.new(0, 16)
+	tabPadding.Parent = tabText
+
+	local minimize = Library.MakeText("TextButton", {
+		Name = "Minimize",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -31, 0, 5),
+		Size = UDim2.fromOffset(20, 20),
+		BackgroundTransparency = 0,
+		BackgroundColor3 = Color3.fromRGB(8, 8, 9),
+		Text = "-",
+		TextSize = 20,
+		Font = Library.Config.FONTS.bold,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		AutoButtonColor = false,
+	})
+	minimize.Parent = topBar
+	Library.AddCorner(minimize, 4)
+	Library.AddStroke(minimize, COLORS.lineLight, 1, 0.15)
+
+	local close = Library.MakeText("TextButton", {
+		Name = "Close",
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, -7, 0, 5),
+		Size = UDim2.fromOffset(20, 20),
+		BackgroundTransparency = 0,
+		BackgroundColor3 = Color3.fromRGB(8, 8, 9),
+		Text = "x",
+		TextSize = 18,
+		Font = Library.Config.FONTS.bold,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		AutoButtonColor = false,
+	})
+	close.Parent = topBar
+	Library.AddCorner(close, 4)
+	Library.AddStroke(close, COLORS.lineLight, 1, 0.15)
+
+	-- Close button handler
+	close.MouseButton1Click:Connect(function()
+		Library.CloseMenu()
+	end)
+
+	-- Minimize button handler
+	minimize.MouseButton1Click:Connect(function()
+		Library.ToggleMinimize()
+	end)
+end
+
+-- Build body
+function Library.BuildBody(window)
+	local body = Instance.new("Frame")
+	body.Name = "Body"
+	body.Position = UDim2.fromOffset(0, 30)
+	body.Size = UDim2.new(1, 0, 1, -30)
+	body.BackgroundColor3 = COLORS.black
+	body.BorderSizePixel = 0
+	body.Parent = window
+
+	-- Create content frames for each top tab
+	local TOP_TAB_NAMES = {}
+	for _, tab in ipairs(Library.Config.TOP_TABS) do
+		table.insert(TOP_TAB_NAMES, tab.name)
+	end
+	
+	local topTabContents = {}
+	for _, tabName in ipairs(TOP_TAB_NAMES) do
+		local content = Instance.new("Frame")
+		content.Name = tabName .. "Content"
+		content.Size = UDim2.new(1, 0, 1, 0)
+		content.BackgroundColor3 = COLORS.black
+		content.BorderSizePixel = 0
+		content.Visible = false
+		content.Parent = body
+		topTabContents[tabName] = content
+	end
+
+	local side = Instance.new("Frame")
+	side.Name = "Side"
+	side.Size = UDim2.new(0, Library.Config.SIZES.sideWidth, 1, 0)
+	side.BackgroundColor3 = Color3.fromRGB(6, 6, 7)
+	side.BorderSizePixel = 0
+	side.Parent = body
+	Library.AddGradient(side, Color3.fromRGB(4, 4, 5), Color3.fromRGB(14, 14, 15), 0)
+
+	local sidePadding = Instance.new("UIPadding")
+	sidePadding.PaddingTop = UDim.new(0, 8)
+	sidePadding.PaddingLeft = UDim.new(0, 5)
+	sidePadding.PaddingRight = UDim.new(0, 5)
+	sidePadding.Parent = side
+
+	local sideList = Instance.new("UIListLayout")
+	sideList.Padding = UDim.new(0, 6)
+	sideList.SortOrder = Enum.SortOrder.LayoutOrder
+	sideList.Parent = side
+
+	local sideDivider = Instance.new("Frame")
+	sideDivider.Name = "SideDivider"
+	sideDivider.Position = UDim2.fromOffset(Library.Config.SIZES.sideWidth, 0)
+	sideDivider.Size = UDim2.new(0, 2, 1, 0)
+	sideDivider.BackgroundColor3 = Color3.fromRGB(18, 18, 19)
+	sideDivider.BorderSizePixel = 0
+	sideDivider.Parent = body
+
+	local main = Instance.new("Frame")
+	main.Name = "Main"
+	main.Position = UDim2.fromOffset(Library.Config.SIZES.sideWidth + 2, 0)
+	main.Size = UDim2.new(1, -(Library.Config.SIZES.sideWidth + 2), 1, 0)
+	main.BackgroundColor3 = COLORS.black
+	main.BorderSizePixel = 0
+	main.Parent = body
+
+	Library.BuildSubTabs(main)
+	local leftPane = Library.BuildContent(main)
+	Library.BuildSideButtons(side, leftPane)
+end
+
+-- Build sub tabs
+function Library.BuildSubTabs(main)
+	local subTabs = Instance.new("Frame")
+	subTabs.Name = "SubTabs"
+	subTabs.Size = UDim2.new(1, 0, 0, 22)
+	subTabs.BackgroundColor3 = Color3.fromRGB(4, 4, 5)
+	subTabs.BorderSizePixel = 0
+	subTabs.Parent = main
+
+	local leftTab = Library.MakeText("TextLabel", {
+		Name = "SubTabGeneral",
+		Size = UDim2.new(0, 408, 1, 0),
+		Text = "General",
+		TextSize = 12,
+	})
+	leftTab.Parent = subTabs
+	local leftTabPadding = Instance.new("UIPadding")
+	leftTabPadding.PaddingLeft = UDim.new(0, 9)
+	leftTabPadding.Parent = leftTab
+
+	local rightTab = Library.MakeText("TextLabel", {
+		Name = "SubTabPreview",
+		Position = UDim2.fromOffset(408, 0),
+		Size = UDim2.new(1, -408, 1, 0),
+		Text = "Preview",
+		TextSize = 12,
+	})
+	rightTab.Parent = subTabs
+	local rightTabPadding = Instance.new("UIPadding")
+	rightTabPadding.PaddingLeft = UDim.new(0, 9)
+	rightTabPadding.Parent = rightTab
+
+	local subDivider = Instance.new("Frame")
+	subDivider.Position = UDim2.fromOffset(408, 0)
+	subDivider.Size = UDim2.fromOffset(1, 22)
+	subDivider.BackgroundColor3 = COLORS.line
+	subDivider.BorderSizePixel = 0
+	subDivider.Parent = subTabs
+end
+
+-- Build content area
+function Library.BuildContent(main)
+	local content = Instance.new("Frame")
+	content.Name = "Content"
+	content.Position = UDim2.fromOffset(0, 22)
+	content.Size = UDim2.new(1, 0, 1, -22)
+	content.BackgroundColor3 = COLORS.black
+	content.BorderSizePixel = 0
+	content.Parent = main
+
+	local leftPane = Instance.new("Frame")
+	leftPane.Name = "LeftPane"
+	leftPane.Size = UDim2.new(0, 408, 1, 0)
+	leftPane.BackgroundColor3 = Color3.fromRGB(2, 2, 3)
+	leftPane.BorderSizePixel = 0
+	leftPane.ClipsDescendants = true
+	leftPane.Parent = content
+
+	local settingsDivider = Instance.new("Frame")
+	settingsDivider.Name = "SettingsDivider"
+	settingsDivider.Position = UDim2.fromOffset(408, 0)
+	settingsDivider.Size = UDim2.new(0, 1, 1, 0)
+	settingsDivider.BackgroundColor3 = Color3.fromRGB(20, 20, 21)
+	settingsDivider.BorderSizePixel = 0
+	settingsDivider.Parent = content
+
+	local rightPane = Instance.new("Frame")
+	rightPane.Name = "RightPane"
+	rightPane.Position = UDim2.fromOffset(409, 0)
+	rightPane.Size = UDim2.new(1, -409, 1, 0)
+	rightPane.BackgroundColor3 = COLORS.black
+	rightPane.BorderSizePixel = 0
+	rightPane.ClipsDescendants = true
+	rightPane.Parent = content
+
+	local rightTopLine = Instance.new("Frame")
+	rightTopLine.Size = UDim2.new(1, 0, 0, 50)
+	rightTopLine.BackgroundColor3 = Color3.fromRGB(2, 2, 3)
+	rightTopLine.BorderSizePixel = 0
+	rightTopLine.Parent = rightPane
+
+	Library.BuildRightTabs(rightTopLine, rightPane)
+	Library.BuildSearchBox(rightTopLine)
+
+	return leftPane
+end
+
+-- Build side buttons
+function Library.BuildSideButtons(side, leftPane)
+	for _, tabName in ipairs(Library.Config.SIDE_TABS) do
+		local button = Library.MakeText("TextButton", {
+			Name = "Button" .. tabName,
+			Size = UDim2.new(1, 0, 0, Library.Config.SIZES.rowHeight),
+			BackgroundTransparency = 0,
+			BackgroundColor3 = Color3.fromRGB(17, 17, 18),
+			Text = tabName,
+			TextSize = Library.Config.TEXT_SIZES.sideTab,
+			Font = Enum.Font.Gotham,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			AutoButtonColor = false,
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+		})
+		button.TextScaled = true
+		local buttonTextPadding = Instance.new("UIPadding")
+		buttonTextPadding.PaddingLeft = UDim.new(0, 4)
+		buttonTextPadding.PaddingRight = UDim.new(0, 4)
+		buttonTextPadding.Parent = button
+		button.TextStrokeTransparency = 1
+		button.Parent = side
+		Library.AddCorner(button, 4)
+		Library.AddStroke(button, COLORS.lineLight, 1, 0.2)
+		local buttonGradient = Library.AddGradient(button, Color3.fromRGB(23, 23, 24), Color3.fromRGB(9, 9, 10), 90)
+
+		local page = Instance.new("ScrollingFrame")
+		page.Name = tabName .. "Page"
+		page.Size = UDim2.new(1, 0, 1, 0)
+		page.BackgroundColor3 = Color3.fromRGB(2, 2, 3)
+		page.BorderSizePixel = 0
+		page.ScrollBarThickness = 3
+		page.ScrollBarImageColor3 = Color3.fromRGB(50, 50, 52)
+		page.CanvasSize = UDim2.fromOffset(0, 0)
+		page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		page.Visible = false
+		page.Parent = leftPane
+
+		local pagePadding = Instance.new("UIPadding")
+		pagePadding.PaddingLeft = UDim.new(0, 6)
+		pagePadding.PaddingRight = UDim.new(0, 2)
+		pagePadding.PaddingTop = UDim.new(0, 2)
+		pagePadding.Parent = page
+
+		local pageList = Instance.new("UIListLayout")
+		pageList.SortOrder = Enum.SortOrder.LayoutOrder
+		pageList.Padding = UDim.new(0, 0)
+		pageList.Parent = page
+
+		tabPages[tabName] = page
+
+		local entry = {
+			button = button,
+			gradient = buttonGradient,
+			name = tabName,
+			page = page,
+		}
+		table.insert(sideButtons, entry)
+
+		Library.RegisterSearchable(tabName, tabName, button)
+
+		button.MouseButton1Click:Connect(function()
+			Library.SelectSideButton(button, buttonGradient, tabName, page)
+		end)
+	end
+end
+
+-- Select side button
+function Library.SelectSideButton(button, buttonGradient, tabName, page)
+	for _, entry in ipairs(sideButtons) do
+		entry.button.TextColor3 = COLORS.white
+		entry.button.TextStrokeColor3 = COLORS.white
+		entry.button.BackgroundColor3 = Color3.fromRGB(25, 25, 28)
+		entry.gradient.Enabled = false
+	end
+
+	button.BackgroundColor3 = COLORS.red
+	buttonGradient.Enabled = true
+	buttonGradient.Color = ColorSequence.new(COLORS.redDark, COLORS.red)
+	selectedSideButtonGradient = buttonGradient
+	button.TextColor3 = COLORS.white
+	button.TextStrokeColor3 = COLORS.white
+
+	-- Update tab text
+	if windowRef then
+		local tabText = windowRef.TopBar.TopTab2
+		if tabText then
+			tabText.Text = tabName
+		end
+	end
+
+	for _, otherPage in pairs(tabPages) do
+		otherPage.Visible = false
+	end
+
+	if page then
+		page.Visible = true
+		activeTabPage = page
+	end
+end
+
+-- Build right tabs
+function Library.BuildRightTabs(rightTopLine, rightPane)
+	local rightTabsContainer = Instance.new("Frame")
+	rightTabsContainer.Name = "RightTabsContainer"
+	rightTabsContainer.Position = UDim2.fromOffset(5, 2)
+	rightTabsContainer.Size = UDim2.new(1, -35, 0, 19)
+	rightTabsContainer.BackgroundTransparency = 1
+	rightTabsContainer.Parent = rightTopLine
+
+	local rightTabsList = Instance.new("UIListLayout")
+	rightTabsList.FillDirection = Enum.FillDirection.Horizontal
+	rightTabsList.Padding = UDim.new(0, 4)
+	rightTabsList.SortOrder = Enum.SortOrder.LayoutOrder
+	rightTabsList.Parent = rightTabsContainer
+
+	for index, tabName in ipairs(Library.Config.RIGHT_TABS) do
+		local tab = Library.MakeText("TextButton", {
+			Name = "RightTab" .. index,
+			Size = UDim2.fromOffset(70, 19),
+			BackgroundTransparency = 0,
+			BackgroundColor3 = index == 1 and COLORS.red or Color3.fromRGB(8, 8, 9),
+			Text = tabName,
+			TextSize = 10,
+			Font = Library.Config.FONTS.bold,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			AutoButtonColor = false,
+		})
+		tab.Parent = rightTabsContainer
+		Library.AddCorner(tab, 3)
+		Library.AddStroke(tab, COLORS.lineLight, 1, 0.25)
+		table.insert(rightTabButtons, { button = tab, name = tabName })
+
+		local page = Instance.new("ScrollingFrame")
+		page.Name = tabName .. "Page"
+		page.Position = UDim2.fromOffset(0, 50)
+		page.Size = UDim2.new(1, 0, 1, -50)
+		page.BackgroundColor3 = Color3.fromRGB(2, 2, 3)
+		page.BorderSizePixel = 0
+		page.ScrollBarThickness = 3
+		page.ScrollBarImageColor3 = Color3.fromRGB(50, 50, 52)
+		page.CanvasSize = UDim2.fromOffset(0, 0)
+		page.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		page.Visible = false
+		page.ScrollingEnabled = true
+		page.Parent = rightPane
+
+		local pagePadding = Instance.new("UIPadding")
+		pagePadding.PaddingLeft = UDim.new(0, 6)
+		pagePadding.PaddingRight = UDim.new(0, 6)
+		pagePadding.PaddingTop = UDim.new(0, 6)
+		pagePadding.Parent = page
+
+		local pageList = Instance.new("UIListLayout")
+		pageList.SortOrder = Enum.SortOrder.LayoutOrder
+		pageList.Padding = UDim.new(0, 4)
+		pageList.Parent = page
+
+		rightTabPages[tabName] = page
+
+		tab.MouseButton1Click:Connect(function()
+			Library.SelectRightTab(tab, tabName, page)
+		end)
+	end
+
+	if rightTabButtons[1] then
+		Library.SelectRightTab(rightTabButtons[1].button, rightTabButtons[1].name, rightTabPages[rightTabButtons[1].name])
+	end
+end
+
+-- Select right tab
+function Library.SelectRightTab(tab, tabName, page)
+	for _, otherTab in ipairs(rightTabButtons) do
+		otherTab.button.BackgroundColor3 = Color3.fromRGB(8, 8, 9)
+		otherTab.button.TextColor3 = COLORS.text
+	end
+
+	selectedRightTab = tab
+	tab.BackgroundColor3 = COLORS.red
+	tab.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+	for _, otherPage in pairs(rightTabPages) do
+		otherPage.Visible = false
+	end
+
+	if page then
+		page.Visible = true
+	end
+end
+
+-- Build search box
+function Library.BuildSearchBox(rightTopLine)
+	local searchBox = Instance.new("Frame")
+	searchBox.Name = "SearchBox"
+	searchBox.Position = UDim2.fromOffset(5, 24)
+	searchBox.Size = UDim2.new(1, -10, 0, 22)
+	searchBox.BackgroundColor3 = Color3.fromRGB(8, 8, 9)
+	searchBox.BorderSizePixel = 0
+	searchBox.Parent = rightTopLine
+	Library.AddCorner(searchBox, 4)
+	Library.AddStroke(searchBox, COLORS.lineLight, 1, 0.15)
+
+	local searchInput = Instance.new("TextBox")
+	searchInput.Name = "SearchInput"
+	searchInput.Size = UDim2.new(1, -30, 1, 0)
+	searchInput.Position = UDim2.fromOffset(10, 0)
+	searchInput.BackgroundTransparency = 1
+	searchInput.Text = ""
+	searchInput.PlaceholderText = "Search..."
+	searchInput.PlaceholderColor3 = COLORS.muted
+	searchInput.TextColor3 = COLORS.text
+	searchInput.TextSize = 12
+	searchInput.Font = Enum.Font.Code
+	searchInput.ClearTextOnFocus = false
+	searchInput.Parent = searchBox
+
+	searchInput.FocusLost:Connect(function(enterPressed)
+		if not enterPressed then return end
+		
+		local searchTerm = string.lower(searchInput.Text)
+		if searchTerm == "" then return end
+		
+		for _, element in ipairs(searchableElements) do
+			if string.lower(element.name) == searchTerm or string.find(string.lower(element.name), searchTerm, 1, true) then
+				for _, sideEntry in ipairs(sideButtons) do
+					if sideEntry.name == element.sideTab then
+						Library.SelectSideButton(sideEntry.button, sideEntry.gradient, sideEntry.name, sideEntry.page)
+						break
+					end
+				end
+				break
+			end
+		end
+		
+		searchInput.Text = ""
+	end)
+end
+
+-- Color picker (simplified version)
+function Library.BuildColorPicker(window)
+	-- Color picker implementation would go here
+	-- For now, this is a placeholder
+end
+
+-- Menu control functions
+function Library.ToggleMenu()
+	if windowRef then
+		windowRef.Visible = not windowRef.Visible
+	end
+end
+
+function Library.OpenMenu()
+	if windowRef then
+		windowRef.Visible = true
+	end
+end
+
+function Library.CloseMenu()
+	if windowRef then
+		windowRef.Visible = false
+	end
+end
+
+function Library.ToggleMinimize()
+	-- Minimize implementation
+end
+
+-- Content building functions
+function Library.AddSection(tabName, sectionName)
+	local page = tabPages[tabName]
+	if not page then return nil end
+	
+	local section = Instance.new("Frame")
+	section.Name = "Section"
+	section.Size = UDim2.new(1, 0, 0, Library.Config.SIZES.sectionHeight)
+	section.BackgroundColor3 = COLORS.black
+	section.BorderSizePixel = 0
+	section.Parent = page
+	
+	local top = Instance.new("Frame")
+	top.Name = "RedSectionLine"
+	top.Position = UDim2.fromOffset(0, 4)
+	top.Size = UDim2.new(1, 0, 0, 2)
+	top.BackgroundColor3 = Color3.fromRGB(128, 18, 48)
+	top.BorderSizePixel = 0
+	top.Parent = section
+	trackAccentDarkBackground(top)
+	
+	local label = Library.MakeText("TextLabel", {
+		Name = "SectionLabel",
+		Position = UDim2.fromOffset(0, 4),
+		Size = UDim2.new(1, -10, 0, 21),
+		Text = sectionName,
+		TextSize = Library.Config.TEXT_SIZES.section,
+	})
+	label.Parent = section
+	
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0, 3)
+	padding.Parent = label
+	
+	return section
+end
+
+function Library.AddToggle(tabName, toggleName, callback)
+	local page = tabPages[tabName]
+	if not page then return nil end
+	
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, Library.Config.SIZES.rowHeight)
+	row.BackgroundColor3 = COLORS.black
+	row.BackgroundTransparency = 0.04
+	row.BorderSizePixel = 0
+	row.Parent = page
+	
+	local label = Library.MakeText("TextLabel", {
+		Name = "Label",
+		Size = UDim2.new(1, -30, 1, 0),
+		Text = toggleName,
+		TextSize = Library.Config.TEXT_SIZES.label,
+		TextColor3 = Color3.fromRGB(205, 205, 210),
+	})
+	label.Parent = row
+	
+	Library.RegisterSearchable(toggleName, tabName, row)
+	
+	local padding = Instance.new("UIPadding")
+	padding.PaddingLeft = UDim.new(0, 3)
+	padding.Parent = label
+	
+	local enabled = false
+	
+	local box = Library.MakeText("TextButton", {
+		Name = "ToggleX",
+		AnchorPoint = Vector2.new(1, 0.5),
+		Position = UDim2.new(1, -3, 0.5, 0),
+		Size = UDim2.fromOffset(Library.Config.SIZES.toggleBoxSize, Library.Config.SIZES.toggleBoxSize),
+		BackgroundTransparency = 0,
+		BackgroundColor3 = Color3.fromRGB(16, 10, 15),
+		Text = "x",
+		TextColor3 = COLORS.pink,
+		TextSize = 18,
+		Font = Library.Config.FONTS.bold,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		AutoButtonColor = false,
+	})
+	box.Parent = row
+	Library.AddCorner(box, 4)
+	Library.AddStroke(box, Color3.fromRGB(48, 28, 43), 1, 0.05)
+	
+	local function setEnabled(value)
+		enabled = value
+		box.Text = enabled and "✓" or "x"
+		box.TextColor3 = enabled and Color3.fromRGB(70, 230, 120) or COLORS.pink
+		box.BackgroundColor3 = enabled and Color3.fromRGB(9, 30, 15) or Color3.fromRGB(16, 10, 15)
+		row.BackgroundTransparency = enabled and 0.02 or 0.14
+		
+		if callback then
+			callback(enabled)
+		end
+	end
+	
+	setEnabled(false)
+	
+	box.MouseButton1Click:Connect(function()
+		setEnabled(not enabled)
+	end)
+	
+	row.InputBegan:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseButton1 then
+			setEnabled(not enabled)
+		end
+	end)
+	
+	return {
+		setState = setEnabled,
+		getState = function() return enabled end
+	}
+end
+
+function Library.AddButton(tabName, buttonText, callback)
+	local page = tabPages[tabName]
+	if not page then return nil end
+	
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, Library.Config.SIZES.rowHeight)
+	row.BackgroundColor3 = COLORS.black
+	row.BackgroundTransparency = 0.04
+	row.BorderSizePixel = 0
+	row.Parent = page
+	
+	local button = Library.MakeText("TextButton", {
+		Name = "ActionButton",
+		Size = UDim2.new(1, -12, 1, -4),
+		Position = UDim2.fromOffset(6, 2),
+		Text = buttonText,
+		TextSize = Library.Config.TEXT_SIZES.label,
+		BackgroundTransparency = 0,
+		BackgroundColor3 = COLORS.red,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
+		Font = Library.Config.FONTS.bold,
+		TextXAlignment = Enum.TextXAlignment.Center,
+		AutoButtonColor = false,
+	})
+	button.Parent = row
+	Library.AddCorner(button, 4)
+	Library.AddStroke(button, Color3.fromRGB(48, 28, 43), 1, 0.05)
+	
+	Library.RegisterSearchable(buttonText, tabName, row)
+	
+	button.MouseButton1Click:Connect(function()
+		if callback then
+			callback()
+		else
+			print("Button clicked:", buttonText)
+		end
+	end)
+	
+	button.MouseButton1Down:Connect(function()
+		button.BackgroundColor3 = COLORS.redDark
+	end)
+	
+	button.MouseButton1Up:Connect(function()
+		button.BackgroundColor3 = COLORS.red
+	end)
+	
+	return button
+end
+
+function Library.AddRightTabContent(tabName, content)
+	local page = rightTabPages[tabName]
+	if not page then return end
+	
+	for _, item in ipairs(content) do
+		if item[1] == "text" then
+			local label = Library.MakeText("TextLabel", {
+				Name = "InfoText",
+				Size = UDim2.new(1, 0, 0, 20),
+				Text = item[2],
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				BackgroundTransparency = 1,
+			})
+			label.Parent = page
+		elseif item[1] == "section" then
+			local section = Instance.new("Frame")
+			section.Size = UDim2.new(1, 0, 0, Library.Config.SIZES.sectionHeight)
+			section.BackgroundColor3 = COLORS.black
+			section.BorderSizePixel = 0
+			section.Parent = page
+			
+			local top = Instance.new("Frame")
+			top.Name = "RedSectionLine"
+			top.Position = UDim2.fromOffset(0, 4)
+			top.Size = UDim2.new(1, 0, 0, 2)
+			top.BackgroundColor3 = Color3.fromRGB(128, 18, 48)
+			top.BorderSizePixel = 0
+			top.Parent = section
+			trackAccentDarkBackground(top)
+			
+			local label = Library.MakeText("TextLabel", {
+				Name = "SectionLabel",
+				Position = UDim2.fromOffset(0, 4),
+				Size = UDim2.new(1, -10, 0, 21),
+				Text = item[2],
+				TextSize = Library.Config.TEXT_SIZES.section,
+			})
+			label.Parent = section
+			
+			local padding = Instance.new("UIPadding")
+			padding.PaddingLeft = UDim.new(0, 3)
+			padding.Parent = label
+		elseif item[1] == "toggle" then
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, 0, 0, Library.Config.SIZES.rowHeight)
+			row.BackgroundColor3 = COLORS.black
+			row.BackgroundTransparency = 0.04
+			row.BorderSizePixel = 0
+			row.Parent = page
+			
+			local label = Library.MakeText("TextLabel", {
+				Name = "Label",
+				Size = UDim2.new(1, -30, 1, 0),
+				Text = item[2],
+				TextSize = Library.Config.TEXT_SIZES.label,
+				TextColor3 = Color3.fromRGB(205, 205, 210),
+			})
+			label.Parent = row
+			
+			Library.RegisterSearchable(item[2], tabName, row)
+			
+			local padding = Instance.new("UIPadding")
+			padding.PaddingLeft = UDim.new(0, 3)
+			padding.Parent = label
+			
+			local enabled = false
+			
+			local box = Library.MakeText("TextButton", {
+				Name = "ToggleX",
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -3, 0.5, 0),
+				Size = UDim2.fromOffset(Library.Config.SIZES.toggleBoxSize, Library.Config.SIZES.toggleBoxSize),
+				BackgroundTransparency = 0,
+				BackgroundColor3 = Color3.fromRGB(16, 10, 15),
+				Text = "x",
+				TextColor3 = COLORS.pink,
+				TextSize = 18,
+				Font = Library.Config.FONTS.bold,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				AutoButtonColor = false,
+			})
+			box.Parent = row
+			Library.AddCorner(box, 4)
+			Library.AddStroke(box, Color3.fromRGB(48, 28, 43), 1, 0.05)
+			
+			local function setEnabled(value)
+				enabled = value
+				box.Text = enabled and "✓" or "x"
+				box.TextColor3 = enabled and Color3.fromRGB(70, 230, 120) or COLORS.pink
+				box.BackgroundColor3 = enabled and Color3.fromRGB(9, 30, 15) or Color3.fromRGB(16, 10, 15)
+				row.BackgroundTransparency = enabled and 0.02 or 0.14
+				
+				if item[3] and type(item[3]) == "function" then
+					item[3](enabled)
+				end
+			end
+			
+			setEnabled(false)
+			
+			box.MouseButton1Click:Connect(function()
+				setEnabled(not enabled)
+			end)
+			
+			row.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 then
+					setEnabled(not enabled)
+				end
+			end)
+		elseif item[1] == "button" then
+			local row = Instance.new("Frame")
+			row.Size = UDim2.new(1, 0, 0, Library.Config.SIZES.rowHeight)
+			row.BackgroundColor3 = COLORS.black
+			row.BackgroundTransparency = 0.04
+			row.BorderSizePixel = 0
+			row.Parent = page
+			
+			local button = Library.MakeText("TextButton", {
+				Name = "ActionButton",
+				Size = UDim2.new(1, -12, 1, -4),
+				Position = UDim2.fromOffset(6, 2),
+				Text = item[2],
+				TextSize = Library.Config.TEXT_SIZES.label,
+				BackgroundTransparency = 0,
+				BackgroundColor3 = COLORS.red,
+				TextColor3 = Color3.fromRGB(255, 255, 255),
+				Font = Library.Config.FONTS.bold,
+				TextXAlignment = Enum.TextXAlignment.Center,
+				AutoButtonColor = false,
+			})
+			button.Parent = row
+			Library.AddCorner(button, 4)
+			Library.AddStroke(button, Color3.fromRGB(48, 28, 43), 1, 0.05)
+			
+			Library.RegisterSearchable(item[2], tabName, row)
+			
+			button.MouseButton1Click:Connect(function()
+				if item[3] and type(item[3]) == "function" then
+					item[3]()
+				else
+					print("Button clicked:", item[2])
+				end
+			end)
+			
+			button.MouseButton1Down:Connect(function()
+				button.BackgroundColor3 = COLORS.redDark
+			end)
+			
+			button.MouseButton1Up:Connect(function()
+				button.BackgroundColor3 = COLORS.red
+			end)
+		end
+	end
+end
+
+-- Get tab page for adding custom content
+function Library.GetTabPage(tabName)
+	return tabPages[tabName]
+end
+
+-- Get right tab page for adding custom content
+function Library.GetRightTabPage(tabName)
+	return rightTabPages[tabName]
+end
+
+return Library
